@@ -95,7 +95,8 @@
     <!--右下角外链工具栏-->
     <div class="bottom-tool">
       <a class="bottom-tool-item" target="_blank" href="https://github.com/Momo707577045/ajax-etag-demo">github</a>
-      <a class="bottom-tool-item" target="_blank" href="https://github.com/Momo707577045/ajax-etag-demo/blob/main/node-index.js">服务端 demo</a>
+      <a class="bottom-tool-item" target="_blank"
+        href="https://github.com/Momo707577045/ajax-etag-demo/blob/main/node-index.js">服务端 demo</a>
       <a class="bottom-tool-item" target="_blank" href="http://blog.luckly-mjw.cn/tool-show/index.html">其他实用工具</a>
     </div>
 
@@ -104,10 +105,16 @@
       <div style="flex:1;margin: 0 20px;">
         <div style="margin-bottom: 10px;">
           <strong style="display: inline-block; margin-right: 20px;">request 请求参数</strong>
-          <input style="float:right" type="button" value="sendPost" @click="onSend('POST')">
-          <input style="float:right;margin-right: 10px;" type="button" value="sendGet" @click="onSend('GET')">
+          <div style="float:right;display: flex;justify-content: center;">
+            <div style="margin-right: 10px;display: inline-block;">
+              测试数据条数：<input v-model="reqDataCount" style="height: 18px;width:80px;border-radius: 4px;">
+            </div>
+            <input style="margin-right: 10px;" type="button" value="sendGet" @click="onSend('GET')">
+            <input type="button" value="sendPost" @click="onSend('POST')">
+          </div>
         </div>
-        <textarea v-model="reqTextarea" style="width: 100%;height:100%;padding: 10px; border-radius: 4px;box-sizing: border-box;"
+        <textarea v-model="reqTextarea"
+          style="width: 100%;height:100%;padding: 10px; border-radius: 4px;box-sizing: border-box;"
           placeholder="示例仅支持对象结构"></textarea>
       </div>
 
@@ -186,6 +193,9 @@
               return resolve(responseText);
             }
           }
+          if (!status) {
+            alert('get 请求不支持这么大的请求参数，请减少数量 或 使用 post 请求')
+          }
 
           reject(status);
         }
@@ -209,44 +219,25 @@
 
     data() {
       return {
-        reqTextarea: `{
-    "code": "",
-    "message": "",
-    "data": {
-        "page": {
-            "page_index": "",
-            "page_size": "",
-            "item_sum": "",
-            "page_sum": ""
-        },
-        "page1": {
-            "page_index": "",
-            "page_size": "",
-            "item_sum": "",
-            "page_sum": ""
-        },
-        "page2": {
-            "page_index": "",
-            "page_size": "",
-            "item_sum": "",
-            "page_sum": ""
-        },
-        "page3": {
-            "page_index": "",
-            "page_size": "",
-            "item_sum": "",
-            "page_sum": ""
-        },
-        "page4": {
-            "page_index": "",
-            "page_size": "",
-            "item_sum": "",
-            "page_sum": ""
-        }
-    }
-}`,
+        reqDataCount: 1,
+        reqTextarea: '',
         respTextarea: '',
       }
+    },
+
+    watch: {
+      reqDataCount(newValue) {
+        this.reqDataCount = Math.abs(parseInt(newValue)) || 10
+        if (newValue > 10000) {
+          this.reqDataCount = 10000
+        }
+        this.setTestData();
+      }
+    },
+
+
+    created() {
+      this.setTestData();
     },
 
     methods: {
@@ -267,6 +258,37 @@
           }
         }, 1000)
       },
+
+      // 设置测试数据，以示例明显的效果
+      setTestData() {
+        let listStr = ''
+        for (let index = 0; index < this.reqDataCount; index++) {
+          listStr += `{
+        id: ${index + 1},
+        userName: "杜磊",
+        intro: "协商缓存主要是通过服务器与客户端之间的通信，来判断客户端的资源是否需要更新，从而减少网络传输和服务器压力。协商缓存的核心思想就是：客户端请求服务器时，服务器判断客户端本地缓存的资源是否过期，如果没有过期，则返回状态码 304 Not Modified 和空的响应体，告诉客户端可以使用本地缓存。如果过期了，则返回新的资源，并让客户端更新本地缓存。",
+        jobNum:${index + 467265},
+        identityCardUrl: "http://dummyimage.com/200x100",
+        identityCard: ${index},
+        sex: "female",
+        address: "天津九龙新县",
+      },`
+        }
+
+        this.reqTextarea = `{
+  code: 200,
+  message: "操作成功",
+  data: {
+    page: {
+      pageIndex: 1,
+      pageSize: ${this.reqDataCount},
+      itemSum: 83,
+      pageSum: 9
+    },
+    list: [${listStr}]
+  }
+}`
+      }
     }
   })
 </script>
