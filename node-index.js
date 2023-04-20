@@ -1,7 +1,7 @@
+const qs = require('./qs');
 const url = require('url')
 const http = require('http')
 const crypto = require('crypto');
-const querystring = require('querystring')
 const port = 14302;
 
 // Etag 处理的中间层
@@ -28,7 +28,7 @@ http.createServer(function (request, response) {
         response.setHeader("Access-Control-Expose-Headers", "*"); // 允许暴露所有响应头，否则前端无法用 JS 获取 ETag 头
         response.setHeader("Access-Control-Allow-Methods", "PUT,POST,GET,DELETE,OPTIONS"); // 允许常规请求方式
         if (request.method === 'GET') {
-            const data = JSON.stringify(querystring.parse(url.parse(request.url))); // 提取请求参数
+            const data = JSON.stringify(qs.parse(url.parse(request.url).query, { depth: Infinity })); // 提取请求参数
             // todo 添加业务逻辑，这里仅做展示，简单将请求参数原封不动返回
             responseWithEtag(request, response, data)
         } else if (request.method === 'POST') {

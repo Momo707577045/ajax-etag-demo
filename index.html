@@ -146,9 +146,9 @@
           console.log('onSend', type, this.reqTextarea);
           try {
             eval(`window.reqData = ${this.reqTextarea}`)
-            console.log(window.reqData)
             ajax('http://127.0.0.1:14302/send', type, window.reqData).then((res) => {
-              console.log('resp', res)
+              console.log('resp', JSON.stringify(JSON.parse(res), null, 4))
+              console.log('eTagPostMap', eTagPostMap)
               this.respTextarea = JSON.stringify(JSON.parse(res), null, 4);
             })
           } catch (error) {
