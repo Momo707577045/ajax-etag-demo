@@ -11,23 +11,134 @@
   <meta name="description" content="接口协商缓存 Demo">
   <title>接口协商缓存 Demo</title>
 </head>
+<style>
+  html,
+  body,
+  #app {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+  }
+
+  .m-p-help {
+    position: fixed;
+    right: 50px;
+    top: 50px;
+    width: 30px;
+    height: 30px;
+    color: #666666;
+    z-index: 2;
+    line-height: 30px;
+    font-weight: bolder;
+    border-radius: 50%;
+    border: 1px solid rgba(27, 31, 35, .2);
+    cursor: pointer;
+    text-align: center;
+    background-color: #eff3f6;
+    background-image: linear-gradient(-180deg, #fafbfc, #eff3f6 90%);
+  }
+
+  .m-p-action {
+    padding: 20px 0;
+    width: 100%;
+    font-size: 35px;
+    text-align: center;
+    font-weight: bold;
+  }
+
+  .bottom-tool {
+    position: fixed;
+    right: 20px;
+    bottom: 26px;
+    z-index: 999;
+    width: 130px;
+    text-align: right;
+    display: inline-block;
+  }
+
+  .bottom-tool-item {
+    display: inline-block;
+    margin: 4px 0;
+    background-color: #eff3f6;
+    background-image: linear-gradient(-180deg, #fafbfc, #eff3f6 90%);
+    color: #24292e;
+    border: 1px solid rgba(27, 31, 35, .2);
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 20px;
+    padding: 6px 12px;
+  }
+
+  .bottom-tool-item:hover {
+    opacity: 0.9;
+  }
+</style>
 
 <body>
-  <section id="app" v-cloak>
-    <div>request 请求参数</div>
-    <textarea v-model="reqTextarea" style="width: 500px;height:300px" placeholder="示例仅支持对象结构"></textarea>
-    <input type="button" value="sendGet" @click="onSend('GET')">
-    <input type="button" value="sendPost" @click="onSend('POST')">
-    <div>response 响应结果</div>
-    <textarea :value="respTextarea" style="width: 500px;height:300px;white-space: pre-line;"
-      placeholder="原封不动返回请求参数，效果请查看控制台"></textarea>
+  <div id="loading">
+    页面加载中，请耐心等待...
+    <h1 style="white-space: pre;">
+      接口 ETag 协商缓存示例，当接口返回值未发生变化时，服务端直接返回 304，
+      复用之前的接口调用结果，充分运用 HTTP 协商缓存特性，节省服务端流量。
+    </h1>
+  </div>
+
+  <section id="app" v-cloak style="height: 100%;">
+    <!--title-->
+    <section class="m-p-action">接口协商缓存 Demo</section>
+
+    <!-- 相关文档 -->
+    <a class="m-p-help" target="_blank" href="https://segmentfault.com/a/1190000021847172">?</a>
+
+    <!--右下角外链工具栏-->
+    <div class="bottom-tool">
+      <a class="bottom-tool-item" target="_blank" href="https://github.com/Momo707577045/ajax-etag-demo">github</a>
+      <a class="bottom-tool-item" target="_blank" href="https://github.com/Momo707577045/ajax-etag-demo/blob/main/node-index.js">服务端 demo</a>
+      <a class="bottom-tool-item" target="_blank" href="http://blog.luckly-mjw.cn/tool-show/index.html">其他实用工具</a>
+    </div>
+
+    <!-- 主体功能 -->
+    <section style="display:flex;height: 80%;">
+      <div style="flex:1;margin: 0 20px;">
+        <div style="margin-bottom: 10px;">
+          <strong style="display: inline-block; margin-right: 20px;">request 请求参数</strong>
+          <input style="float:right" type="button" value="sendPost" @click="onSend('POST')">
+          <input style="float:right;margin-right: 10px;" type="button" value="sendGet" @click="onSend('GET')">
+        </div>
+        <textarea v-model="reqTextarea" style="width: 100%;height:100%;padding: 10px; border-radius: 4px;box-sizing: border-box;"
+          placeholder="示例仅支持对象结构"></textarea>
+      </div>
+
+      <div style="flex:1;margin: 0 20px;">
+        <div style="margin-bottom: 10px;">
+          <strong>response 响应结果</strong>
+        </div>
+        <textarea :value="respTextarea"
+          style="width: 100%;height:100%;padding: 10px;white-space: pre-line; border-radius: 4px;box-sizing: border-box;"
+          placeholder="原封不动返回请求参数，效果请查看控制台"></textarea>
+      </div>
+    </section>
+
+    <section style="position: fixed; bottom: 10px;left: 20px;">
+      <div>【注意】：请确认控制台的 Disable cache 是否已经取消勾选</div>
+      <div>【注意】：在 chrome 浏览器中，get 请求的 304 状态码会被转化为 200 状态码，缓存的效果需通过请求缓存前后的 size 来呈现</div>
+    </section>
   </section>
 </body>
 
 <!--vue 前端框架-->
-<script src="./md5.js"></script>
+<script src="//upyun.luckly-mjw.cn/lib/md5.js"></script>
 <script src="//upyun.luckly-mjw.cn/lib/vue.js"></script>
 <script>
+  document.getElementById('loading') && document.getElementById('loading').remove()
+
+  // 因域名未配置证书，暂不支持 https 域名下访问
+  if (location.href.includes('https')) {
+    location.href = location.href.replace('https', 'http')
+  }
+
   // GET 请求专用序列化参数
   function serializeParams(params, prefix = '') {
     const query = [];
@@ -146,7 +257,7 @@
           console.log('onSend', type, this.reqTextarea);
           try {
             eval(`window.reqData = ${this.reqTextarea}`)
-            ajax('http://127.0.0.1:14302/send', type, window.reqData).then((res) => {
+            ajax('http://ajax-etag.luckly-mjw.cn/send', type, window.reqData).then((res) => {
               console.log('resp', JSON.stringify(JSON.parse(res), null, 4))
               console.log('eTagPostMap', eTagPostMap)
               this.respTextarea = JSON.stringify(JSON.parse(res), null, 4);
