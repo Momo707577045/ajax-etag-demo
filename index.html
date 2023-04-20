@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+    content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <meta name="author" content="毛静文,Momo">
+  <meta name="keywords" content="接口缓存,毛静文的博客,Momo's Blog">
+  <meta name="description" content="接口缓存">
+  <title>ajax cache</title>
+</head>
+
+<body>
+  <section id="app" v-cloak>
+    <div>request</div>
+    <textarea v-model="reqTextarea" style="width: 500px;height:300px"></textarea>
+    <input type="button" value="sendGet" @click="onSend('GET')">
+    <input type="button" value="sendPost" @click="onSend('POST')">
+    <div>response</div>
+    <textarea :value="respTextarea" style="width: 500px;height:300px"></textarea>
+  </section>
+</body>
+
+<!--vue 前端框架-->
+<script src="//upyun.luckly-mjw.cn/lib/vue.js"></script>
+<script>
+  const eTagPostMap = {}
+  function ajax(options) {
+    return new Promise((resolve, reject) => {
+      let baseDomain = '';
+      options = options || {};
+      options.type = (options.type || 'GET').toUpperCase();
+      options.dataType = options.dataType || 'json';
+
+
+      if (options.url.indexOf('http') == -1) {
+        options.url = baseDomain + options.url;
+        options.url = options.url.replace(/([^:])\/\//g, '$1/'); // 兼容双横岗
+      }
+
+      let xhr = new XMLHttpRequest();
+      // xhr.withCredentials = true; //支持跨域发送cookies
+
+      xhr.onreadystatechange = function () {
+        if (xhr.readyState === 4) {
+          let { status, responseText, responseXML } = xhr;
+          if (status >= 200 && status < 300) {
+            if (options.type === 'POST' && xhr.getResponseHeader('ETag')) {
+              eTagPostMap[options.url] = eTagPostMap[options.url] || {}
+              eTagPostMap[options.url][xhr.getResponseHeader('ETag')] = responseText
+            }
+            resolve(responseText);
+          } else if (status === 304) {
+            resolve(eTagPostMap[options.url][xhr.getResponseHeader('ETag')].content);
+          } else {
+            reject(status);
+          }
+        }
+      };
+
+      //连接 和 发送 - 第二步
+      if (options.type === 'GET') {
+        let arr = [];
+        for (let name in options.data) {
+          arr.push(encodeURIComponent(name) + '=' + encodeURIComponent(options.data[name]));
+        }
+        xhr.open('GET', options.url + '?' + arr.join('&'), true);
+        xhr.send(null);
+      } else if (options.type === 'POST') {
+        const data = JSON.stringify(options.data)
+        xhr.open('POST', options.url, true);
+        if (eTagPostMap[options.url]) {
+          xhr.setRequestHeader("if-none-match", Object.keys(eTagPostMap[options.url])[0]);
+        }
+        xhr.send(JSON.stringify(options.data));
+      }
+    })
+  }
+  new Vue({
+    el: '#app',
+
+    data() {
+      return {
+        input: '',
+        reqTextarea: `
+        {
+    "code": "",
+    "message": "",
+    "data": {
+        "page": {
+            "page_index": "",
+            "page_size": "",
+            "item_sum": "",
+            "page_sum": ""
+        },
+        "page1": {
+            "page_index": "",
+            "page_size": "",
+            "item_sum": "",
+            "page_sum": ""
+        },
+        "page2": {
+            "page_index": "",
+            "page_size": "",
+            "item_sum": "",
+            "page_sum": ""
+        },
+        "page3": {
+            "page_index": "",
+            "page_size": "",
+            "item_sum": "",
+            "page_sum": ""
+        },
+        "page4": {
+            "page_index": "",
+            "page_size": "",
+            "item_sum": "",
+            "page_sum": ""
+        }
+    }
+}`,
+        respTextarea: '',
+      }
+    },
+
+    methods: {
+      onSend(type) {
+        this.respTextarea = 'sending';
+        setTimeout(() => {
+          console.log('onSend', type, this.reqTextarea);
+          ajax({
+            type,
+            url: 'http://127.0.0.1:14302/send',
+            data: JSON.parse(this.reqTextarea)
+          }).then((res) => {
+            console.log('resp', res)
+            this.respTextarea = res;
+          })
+        }, 1000)
+      },
+    }
+  })
+</script>
+
+</html>
