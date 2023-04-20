@@ -7,74 +7,89 @@
     content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
   <meta http-equiv="X-UA-Compatible" content="ie=edge">
   <meta name="author" content="毛静文,Momo">
-  <meta name="keywords" content="接口缓存,毛静文的博客,Momo's Blog">
-  <meta name="description" content="接口缓存">
-  <title>ajax cache</title>
+  <meta name="keywords" content="接口协商缓存 Demo,interface cache demo,毛静文的博客,Momo's Blog">
+  <meta name="description" content="接口协商缓存 Demo">
+  <title>接口协商缓存 Demo</title>
 </head>
 
 <body>
   <section id="app" v-cloak>
-    <div>request</div>
-    <textarea v-model="reqTextarea" style="width: 500px;height:300px"></textarea>
+    <div>request 请求参数</div>
+    <textarea v-model="reqTextarea" style="width: 500px;height:300px" placeholder="示例仅支持对象结构"></textarea>
     <input type="button" value="sendGet" @click="onSend('GET')">
     <input type="button" value="sendPost" @click="onSend('POST')">
-    <div>response</div>
-    <textarea :value="respTextarea" style="width: 500px;height:300px"></textarea>
+    <div>response 响应结果</div>
+    <textarea :value="respTextarea" style="width: 500px;height:300px;white-space: pre-line;"
+      placeholder="原封不动返回请求参数，效果请查看控制台"></textarea>
   </section>
 </body>
 
 <!--vue 前端框架-->
+<script src="./md5.js"></script>
 <script src="//upyun.luckly-mjw.cn/lib/vue.js"></script>
 <script>
-  const eTagPostMap = {}
-  function ajax(options) {
-    return new Promise((resolve, reject) => {
-      let baseDomain = '';
-      options = options || {};
-      options.type = (options.type || 'GET').toUpperCase();
-      options.dataType = options.dataType || 'json';
-
-
-      if (options.url.indexOf('http') == -1) {
-        options.url = baseDomain + options.url;
-        options.url = options.url.replace(/([^:])\/\//g, '$1/'); // 兼容双横岗
+  // GET 请求专用序列化参数
+  function serializeParams(params, prefix = '') {
+    const query = [];
+    for (const [key, value] of Object.entries(params)) {
+      if (typeof value === 'object') {
+        const nestedPrefix = prefix ? `${prefix}[${key}]` : key;
+        query.push(serializeParams(value, nestedPrefix));
+      } else {
+        const paramKey = prefix ? `${prefix}[${key}]` : key;
+        query.push(`${paramKey}=${encodeURIComponent(value)}`);
       }
+    }
+    return query.join('&');
+  }
 
-      let xhr = new XMLHttpRequest();
-      // xhr.withCredentials = true; //支持跨域发送cookies
-
+  // 由于 post 请求本身不支持 Etag 缓存，需要前端自行实现缓存机制
+  const eTagPostMap = {}
+  function ajax(url, type, reqData) {
+    return new Promise((resolve, reject) => {
+      let postReqHash = ''; // 以请求路径及其参数的 hash 作为 key 进行缓存
+      if (type === 'POST') {
+        postReqHash = md5.create().update(url + JSON.stringify(reqData)).digest('hex'); // 以请求路径及其参数的 hash 作为 key 进行缓存
+      }
+      const xhr = new XMLHttpRequest();
       xhr.onreadystatechange = function () {
         if (xhr.readyState === 4) {
           let { status, responseText, responseXML } = xhr;
+
+          // 注意，GET 请求的 304 响应头在 chrome 接受时，给到 JS 会变成 200 状态码，且有正常的 responseText
           if (status >= 200 && status < 300) {
-            if (options.type === 'POST' && xhr.getResponseHeader('ETag')) {
-              eTagPostMap[options.url] = eTagPostMap[options.url] || {}
-              eTagPostMap[options.url][xhr.getResponseHeader('ETag')] = responseText
+            // POST 请求的响应头有 ETag，则缓存该结果
+            if (type === 'POST' && xhr.getResponseHeader('ETag')) {
+              eTagPostMap[postReqHash] = {
+                content: responseText,
+                etag: xhr.getResponseHeader('ETag'),
+              }
             }
-            resolve(responseText);
-          } else if (status === 304) {
-            resolve(eTagPostMap[options.url][xhr.getResponseHeader('ETag')].content);
-          } else {
-            reject(status);
+            return resolve(responseText);
           }
+
+          if (status === 304) { // 注意，GET 请求的 304 响应头在 chrome 接受时，给到 JS 会变成 200 状态码
+            if (type === 'POST') {
+              return resolve(eTagPostMap[postReqHash].content);
+            } else if (type === 'GET') { // 在 chrome 浏览器 GET 请求不会有 304 状态码，在这里只是兜底，以防其他浏览器表现不一致
+              return resolve(responseText);
+            }
+          }
+
+          reject(status);
         }
       };
 
-      //连接 和 发送 - 第二步
-      if (options.type === 'GET') {
-        let arr = [];
-        for (let name in options.data) {
-          arr.push(encodeURIComponent(name) + '=' + encodeURIComponent(options.data[name]));
-        }
-        xhr.open('GET', options.url + '?' + arr.join('&'), true);
+      if (type === 'GET') {
+        xhr.open('GET', url + '?' + serializeParams(reqData), true);
         xhr.send(null);
-      } else if (options.type === 'POST') {
-        const data = JSON.stringify(options.data)
-        xhr.open('POST', options.url, true);
-        if (eTagPostMap[options.url]) {
-          xhr.setRequestHeader("if-none-match", Object.keys(eTagPostMap[options.url])[0]);
+      } else if (type === 'POST') {
+        xhr.open('POST', url, true);
+        // 如果之前发送过这个请求，且有 ETag hash 记录，则当再次发起时，携带上该 hash
+        if (eTagPostMap[postReqHash]) {
+          xhr.setRequestHeader("if-none-match", eTagPostMap[postReqHash].etag);
         }
-        xhr.send(JSON.stringify(options.data));
+        xhr.send(JSON.stringify(reqData));
       }
     })
   }
@@ -83,9 +98,7 @@
 
     data() {
       return {
-        input: '',
-        reqTextarea: `
-        {
+        reqTextarea: `{
     "code": "",
     "message": "",
     "data": {
@@ -128,16 +141,19 @@
     methods: {
       onSend(type) {
         this.respTextarea = 'sending';
+        // 为模拟接口调用时长，一秒后再发生请求
         setTimeout(() => {
           console.log('onSend', type, this.reqTextarea);
-          ajax({
-            type,
-            url: 'http://127.0.0.1:14302/send',
-            data: JSON.parse(this.reqTextarea)
-          }).then((res) => {
-            console.log('resp', res)
-            this.respTextarea = res;
-          })
+          try {
+            eval(`window.reqData = ${this.reqTextarea}`)
+            console.log(window.reqData)
+            ajax('http://127.0.0.1:14302/send', type, window.reqData).then((res) => {
+              console.log('resp', res)
+              this.respTextarea = JSON.stringify(JSON.parse(res), null, 4);
+            })
+          } catch (error) {
+            alert('request 请求参数不是一个标准对象，请检查')
+          }
         }, 1000)
       },
     }
