@@ -88,6 +88,8 @@ function responseWithEtag(request, response, responseData) {
   - 在 post 调用完成后，以请求路径及请求体作为 hash 参数，唯一标识该请求。存储对应的 ETag 响应头，及对应的返回值。
   - 注意，js 获取 ETag 请求头，需要后端开放该请求头的访问权，`response.setHeader("Access-Control-Expose-Headers", "ETag"); // 允许暴露ETag响应头，否则前端无法用 JS 获取 ETag 头`
   - 在发起 post 请求时，查询该请求是否发起过（以请求路径及请求体作为 hash 参数唯一标识），若发起过，则在请求头中自行添加`if-none-match`请求头
+  - 为防止内存占用过大，可对 post 缓存做容量控制，当缓存内容超过给定大小时，删除最久未被使用的缓存。这时需要后端 nginx 添加 content-length 响应头 `add_header Content-Length $content_length;`，以标记该响应体的大小。
+  
   
 ```
   // 由于 post 请求本身不支持 ETag 缓存，需要前端自行实现缓存机制

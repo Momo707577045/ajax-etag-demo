@@ -90,7 +90,7 @@
     <section class="m-p-action">接口协商缓存 Demo</section>
 
     <!-- 相关文档 -->
-    <a class="m-p-help" target="_blank" href="https://segmentfault.com/a/1190000021847172">?</a>
+    <a class="m-p-help" target="_blank" href="https://segmentfault.com/a/1190000043711049">?</a>
 
     <!--右下角外链工具栏-->
     <div class="bottom-tool">
@@ -106,6 +106,10 @@
         <div style="margin-bottom: 10px;">
           <strong style="display: inline-block; margin-right: 20px;">request 请求参数</strong>
           <div style="float:right;display: flex;justify-content: center;">
+            <div style="margin-right: 10px;display: inline-block;">
+              post缓存字节：<input v-model="maxCacheSize" style="height: 18px;width:60px;border-radius: 4px;"
+                placeholder="默认最大缓存 100kb">
+            </div>
             <div style="margin-right: 10px;display: inline-block;">
               测试数据量：<input v-model="reqDataCount" style="height: 18px;width:60px;border-radius: 4px;">
             </div>
@@ -131,7 +135,9 @@
     <section style="position: fixed; bottom: 10px;left: 20px;">
       <div>【注意】请确认控制台的 Disable cache 是否已经取消勾选</div>
       <div>【注意】由于本示例需要将测试数据传递给后端，故上行阶段仍有一定耗时，对比 200 及 304 的耗时即可得到优化效果</div>
-      <div>【注意】<a target="_blank" href="https://stackoverflow.com/questions/67017167/why-chrome-dev-tool-shows-a-200-status-code-instead-of-304">在 chrome 浏览器中，get 请求的 304 状态码会被转化为 200 状态码</a>，缓存的效果需通过请求缓存前后的 size 来呈现</div>
+      <div>【注意】<a target="_blank"
+          href="https://stackoverflow.com/questions/67017167/why-chrome-dev-tool-shows-a-200-status-code-instead-of-304">在
+          chrome 浏览器中，get 请求的 304 状态码会被转化为 200 状态码</a>，缓存的效果需通过请求缓存前后的 size 来呈现</div>
     </section>
   </section>
 </body>
@@ -163,6 +169,8 @@
   }
 
   // 由于 post 请求本身不支持 Etag 缓存，需要前端自行实现缓存机制
+  let cacheSize = 0 // 当前缓存大小
+  let maxCacheSize = 0 // 最大缓存大小
   const eTagPostMap = {}
   function ajax(url, type, reqData) {
     return new Promise((resolve, reject) => {
@@ -179,9 +187,27 @@
           if (status >= 200 && status < 300) {
             // POST 请求的响应头有 ETag，则缓存该结果
             if (type === 'POST' && xhr.getResponseHeader('ETag')) {
+              const size = parseInt(xhr.getResponseHeader('Content-Length') || '0'); // 返回值大小
+              cacheSize += size;
               eTagPostMap[postReqHash] = {
-                content: responseText,
-                etag: xhr.getResponseHeader('ETag'),
+                size,
+                key: postReqHash, // 本身特征值
+                content: responseText, // 返回值内容
+                etag: xhr.getResponseHeader('ETag'), // hash 值
+                time: new Date().getTime() // 缓存时间
+              }
+              // 若当前缓存值，大于最大值，删除最旧的，并重新计算当前 cacheSize
+              if (cacheSize > maxCacheSize) {
+                cacheSize = 0
+                const mapList = Object.values(eTagPostMap);
+                mapList.sort((item1, item2) => item2.time - item1.time > 0) // 按时间排序
+                mapList.forEach((mapItem) => cacheSize += mapItem.size) // 重新计算总大小
+                // 从旧的元素开始删除
+                while (cacheSize > maxCacheSize && mapList.length > 1) {
+                  const deleteItem = mapList.shift()
+                  cacheSize -= deleteItem.size
+                  delete eTagPostMap[deleteItem.key]
+                }
               }
             }
             return resolve(responseText);
@@ -189,6 +215,7 @@
 
           if (status === 304) { // 注意，GET 请求的 304 响应头在 chrome 接受时，给到 JS 会变成 200 状态码
             if (type === 'POST') {
+              eTagPostMap[postReqHash].time = new Date().getTime(); // 刷新缓存时间
               return resolve(eTagPostMap[postReqHash].content);
             } else if (type === 'GET') { // 在 chrome 浏览器 GET 请求不会有 304 状态码，在这里只是兜底，以防其他浏览器表现不一致
               return resolve(responseText);
@@ -220,6 +247,7 @@
 
     data() {
       return {
+        maxCacheSize: 100 * 1024, // 默认最大缓存 100kb
         reqDataCount: 1,
         reqTextarea: '',
         respTextarea: '',
@@ -233,6 +261,10 @@
           this.reqDataCount = 10000
         }
         this.setTestData();
+      },
+      maxCacheSize(newValue) {
+        this.maxCacheSize = Math.abs(parseInt(newValue || 0))
+        maxCacheSize = parseInt(this.maxCacheSize)
       }
     },
 
@@ -252,6 +284,7 @@
             ajax('http://ajax-etag.luckly-mjw.cn/send', type, window.reqData).then((res) => {
               console.log('resp', JSON.stringify(JSON.parse(res), null, 4))
               console.log('eTagPostMap', eTagPostMap)
+              console.log('当前缓存大小', cacheSize, '最大缓存大小', this.maxCacheSize)
               this.respTextarea = JSON.stringify(JSON.parse(res), null, 4);
             })
           } catch (error) {
