@@ -191,9 +191,9 @@
               cacheSize += size;
               eTagPostMap[postReqHash] = {
                 size,
-                key: postReqHash, // 本身特征值
+                key: postReqHash, // 当前请求特征值
                 content: responseText, // 返回值内容
-                etag: xhr.getResponseHeader('ETag'), // hash 值
+                eTag: xhr.getResponseHeader('ETag'), // hash 值
                 time: new Date().getTime() // 缓存时间
               }
               // 若当前缓存值，大于最大值，删除最旧的，并重新计算当前 cacheSize
@@ -236,7 +236,7 @@
         xhr.open('POST', url, true);
         // 如果之前发送过这个请求，且有 ETag hash 记录，则当再次发起时，携带上该 hash
         if (eTagPostMap[postReqHash]) {
-          xhr.setRequestHeader("if-none-match", eTagPostMap[postReqHash].etag);
+          xhr.setRequestHeader("if-none-match", eTagPostMap[postReqHash].eTag);
         }
         xhr.send(JSON.stringify(reqData));
       }

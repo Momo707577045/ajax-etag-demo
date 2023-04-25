@@ -92,7 +92,9 @@ function responseWithEtag(request, response, responseData) {
   
   
 ```
-  // 由于 post 请求本身不支持 ETag 缓存，需要前端自行实现缓存机制
+  // 由于 post 请求本身不支持 Etag 缓存，需要前端自行实现缓存机制
+  let cacheSize = 0 // 当前缓存大小
+  let maxCacheSize = 0 // 最大缓存大小
   const eTagPostMap = {}
   function ajax(url, type, reqData) {
     return new Promise((resolve, reject) => {
@@ -109,9 +111,27 @@ function responseWithEtag(request, response, responseData) {
           if (status >= 200 && status < 300) {
             // POST 请求的响应头有 ETag，则缓存该结果
             if (type === 'POST' && xhr.getResponseHeader('ETag')) {
+              const size = parseInt(xhr.getResponseHeader('Content-Length') || '0'); // 返回值大小
+              cacheSize += size;
               eTagPostMap[postReqHash] = {
-                content: responseText,
-                etag: xhr.getResponseHeader('ETag'),
+                size,
+                key: postReqHash, // 当前请求特征值
+                content: responseText, // 返回值内容
+                eTag: xhr.getResponseHeader('ETag'), // hash 值
+                time: new Date().getTime() // 缓存时间
+              }
+              // 若当前缓存值，大于最大值，删除最旧的，并重新计算当前 cacheSize
+              if (cacheSize > maxCacheSize) {
+                cacheSize = 0
+                const mapList = Object.values(eTagPostMap);
+                mapList.sort((item1, item2) => item2.time - item1.time > 0) // 按时间排序
+                mapList.forEach((mapItem) => cacheSize += mapItem.size) // 重新计算总大小
+                // 从旧的元素开始删除
+                while (cacheSize > maxCacheSize && mapList.length > 1) {
+                  const deleteItem = mapList.shift()
+                  cacheSize -= deleteItem.size
+                  delete eTagPostMap[deleteItem.key]
+                }
               }
             }
             return resolve(responseText);
@@ -119,6 +139,7 @@ function responseWithEtag(request, response, responseData) {
 
           if (status === 304) { // 注意，GET 请求的 304 响应头在 chrome 接受时，给到 JS 会变成 200 状态码
             if (type === 'POST') {
+              eTagPostMap[postReqHash].time = new Date().getTime(); // 刷新缓存时间
               return resolve(eTagPostMap[postReqHash].content);
             } else if (type === 'GET') { // 在 chrome 浏览器 GET 请求不会有 304 状态码，在这里只是兜底，以防其他浏览器表现不一致
               return resolve(responseText);
@@ -139,11 +160,12 @@ function responseWithEtag(request, response, responseData) {
         xhr.open('POST', url, true);
         // 如果之前发送过这个请求，且有 ETag hash 记录，则当再次发起时，携带上该 hash
         if (eTagPostMap[postReqHash]) {
-          xhr.setRequestHeader("if-none-match", eTagPostMap[postReqHash].etag);
+          xhr.setRequestHeader("if-none-match", eTagPostMap[postReqHash].eTag);
         }
         xhr.send(JSON.stringify(reqData));
       }
     })
+  }
 ```
 
 ### hash 性能
