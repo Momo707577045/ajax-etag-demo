@@ -16,7 +16,7 @@ function responseWithEtag(request, response, responseData) {
     } else { // 无 if-none-match 请求头，或者返回值内容发生变化，hash 匹配不上
         console.log('ETag hash mismatching')
         response.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
-        response.end(responseData); // 返回业务数据
+        response.end(responseData.toString()); // 返回业务数据
     }
 }
 
@@ -33,7 +33,8 @@ http.createServer(function (request, response) {
             responseWithEtag(request, response, data)
         } else if (request.method === 'POST') {
             let postData = '';
-            request.on('data', chunk => postData += chunk.toString());
+            request.setEncoding('utf8'); // 设置字符编码为 UTF-8，必须设置，否则会小概率发生乱码问题，详情参考：https://juejin.cn/post/6981797254705184798
+            request.on('data', chunk => postData += chunk);
             request.on('end', () => {
                 // todo 添加业务逻辑，这里仅做展示，简单将请求参数原封不动返回
                 responseWithEtag(request, response, postData)
